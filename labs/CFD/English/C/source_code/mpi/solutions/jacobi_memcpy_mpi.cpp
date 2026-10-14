@@ -30,7 +30,7 @@
 #include <iostream>
 #include <sstream>
 #include <cuda_runtime.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 #include <mpi.h>
 #include <omp.h>
 

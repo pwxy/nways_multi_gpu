@@ -1,14 +1,14 @@
 # Copyright (c) 2017-2018, NVIDIA CORPORATION. All rights reserved.
 NVCC=nvcc
-MPICXX=mpicxx
+MPICXX=CC
 #CUDA_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/21.5/cuda/
 GENCODE_SM70    := -gencode arch=compute_70,code=sm_70
 GENCODE_SM80    := -gencode arch=compute_80,code=sm_80 
-GENCODE_FLAGS	:= $(GENCODE_SM70) $(GENCODE_SM80)
+GENCODE_FLAGS   := $(GENCODE_SM80)
 
 NVCC_FLAGS += -lineinfo $(GENCODE_FLAGS) -std=c++14
 MPICXX_FLAGS = -g -I$(CUDA_HOME)/include  -fopenmp -std=c++14
-LD_FLAGS = -L$(CUDA_HOME)/lib64 -lcudart -lnvToolsExt
+LD_FLAGS = -L$(CUDA_HOME)/lib64 -lcudart
 
 hello_world: Makefile hello_world.c
 	$(MPICXX) $(MPICXX_FLAGS) hello_world.c $(LD_FLAGS) -o hello_world
