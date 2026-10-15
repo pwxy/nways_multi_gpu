@@ -31,7 +31,7 @@
 #include <sstream>
 
 #include <omp.h>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 #define BLOCK_DIM_X 32
 #define BLOCK_DIM_Y 32
