@@ -7,8 +7,9 @@ GENCODE_SM80    := -gencode arch=compute_80,code=sm_80
 GENCODE_FLAGS   := $(GENCODE_SM80)
 
 NVCC_FLAGS += -lineinfo $(GENCODE_FLAGS) -std=c++14
-MPICXX_FLAGS = -g -I$(CUDA_HOME)/include  -fopenmp -std=c++14
-LD_FLAGS = -L$(CUDA_HOME)/lib64 -lcudart
+MPICXX_FLAGS = -g -fopenmp -std=c++14
+#MPICXX_FLAGS = -g -I$(CUDA_HOME)/include  -fopenmp -std=c++14
+#LD_FLAGS = -L$(CUDA_HOME)/lib64 -lcudart
 
 hello_world: Makefile hello_world.c
 	$(MPICXX) $(MPICXX_FLAGS) hello_world.c $(LD_FLAGS) -o hello_world
