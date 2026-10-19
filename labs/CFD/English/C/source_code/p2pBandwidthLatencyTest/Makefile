@@ -50,10 +50,10 @@ LIBRARIES :=
 ################################################################################
 GENCODE_SM70    := -gencode arch=compute_70,code=sm_70
 GENCODE_SM80    := -gencode arch=compute_80,code=sm_80 
-GENCODE_FLAGS	:= $(GENCODE_SM70) $(GENCODE_SM80)
+GENCODE_FLAGS	:= $(GENCODE_SM80)
 
 NVCC_FLAGS += -std=c++14
-LD_FLAGS += -lcudart
+#LD_FLAGS += -lcudart
 ################################################################################
 
 # Target rules
