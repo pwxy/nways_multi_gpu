@@ -34,7 +34,7 @@
 #include <iostream>
 #include <sstream>
 #include <cub/block/block_reduce.cuh>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 #define BLOCK_DIM_X 1024
 #define BLOCK_DIM_Y 1
@@ -135,13 +135,13 @@ __global__ void jacobi_kernel(float* __restrict__ const a_new, const float* __re
     int block_ix = ix - threadIdx.x; /* That is, block_ix = blockIdx.x * blockDim.x + 1 */
 
     /* Communicate the boundaries */
-    // TODO: Use block-level NVSHMEM put communication API to transfer the halo pointed to by 
+    // TODO: Use block-level NVSHMEM put communication API to transfer the halo pointed to by
     // "a_new + iy_start * nx + block_ix" to "a_new + top_iy * nx + block_ix" in the "top_pe"
     if ((block_iy <= iy_start) && (iy_start < block_iy + blockDim.y)) {
         nvshmemx_/*Fill me*/(/*Fill me*/, /*Fill me*/,
                                    min(blockDim.x, nx - 1 - block_ix), /*Fill me*/);
     }
-    // TODO: Use block-level NVSHMEM put communication API to transfer the halo pointed to by 
+    // TODO: Use block-level NVSHMEM put communication API to transfer the halo pointed to by
     // "a_new + (iy_end - 1) * nx + block_ix" to "a_new + bottom_iy * nx + block_ix" in the "bottom_pe"
     if ((block_iy < iy_end) && (iy_end <= block_iy + blockDim.y)) {
         nvshmemx_/*Fill me*/(/*Fill me*/, /*Fill me*/,
@@ -235,11 +235,9 @@ int main(int argc, char* argv[]) {
     CUDA_RT_CALL(cudaSetDevice(local_rank));
     CUDA_RT_CALL(cudaFree(0));
 
-    MPI_Comm mpi_comm;
-    nvshmemx_init_attr_t attr;
+    nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
+    nvshmemx_uniqueid_t  id   = NVSHMEMX_UNIQUEID_INITIALIZER;
 
-    mpi_comm = MPI_COMM_WORLD;
-    attr.mpi_comm = &mpi_comm;
     // Set symmetric heap size for nvshmem based on problem size
     // Its default value in nvshmem is 1 GB which is not sufficient
     // for large mesh sizes
@@ -264,7 +262,13 @@ int main(int argc, char* argv[]) {
             printf("Setting environment variable NVSHMEM_SYMMETRIC_SIZE = %llu\n", required_symmetric_heap_size);
         setenv("NVSHMEM_SYMMETRIC_SIZE", symmetric_heap_size_str, 1);
     }
-    nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+
+    /* Must stay AFTER the setenv above: NVSHMEM reads NVSHMEM_SYMMETRIC_SIZE
+       during init. */
+    if (rank == 0) nvshmemx_get_uniqueid(&id);
+    MPI_CALL(MPI_Bcast(&id, sizeof(nvshmemx_uniqueid_t), MPI_UINT8_T, 0, MPI_COMM_WORLD));
+    nvshmemx_set_attr_uniqueid_args(rank, size, &id, &attr);
+    nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
 
     int npes = nvshmem_n_pes();
     int mype = nvshmem_my_pe();
@@ -286,7 +290,7 @@ int main(int argc, char* argv[]) {
     if (!skip_single_gpu){
         runtime_serial = single_gpu(nx, ny, iter_max, a_ref_h, (0 == mype), mype);
     }
-    
+
     nvshmem_barrier_all();
     // ny - 2 rows are distributed amongst `size` ranks in such a way
     // that each rank gets either (ny - 2) / size or (ny - 2) / size + 1 rows.
@@ -468,7 +472,7 @@ int main(int argc, char* argv[]) {
                 runtime_serial / (size * (stop - start)) * 100);
         }
         else {
-            printf("%dx%d: %d GPUs: %8.4f s \n", nx, ny, size, (stop - start)); 
+            printf("%dx%d: %d GPUs: %8.4f s \n", nx, ny, size, (stop - start));
         }
     }
 
@@ -540,9 +544,9 @@ double single_gpu(const int nx, const int ny, const int iter_max, float* const a
     while (l2_norm > tol && iter < iter_max) {
         CUDA_RT_CALL(cudaMemsetAsync(l2_norm_d, 0, sizeof(float)));
 
-        jacobi_kernel<<<dim_grid, dim_block>>>(a_new, a, l2_norm_d, iy_start, iy_end, nx, 
+        jacobi_kernel<<<dim_grid, dim_block>>>(a_new, a, l2_norm_d, iy_start, iy_end, nx,
                                                 mype, iy_end + 1, mype, (iy_start - 1));
-        
+
         iter++;
         if (print && ((iter % 100) == 0)) {
             CUDA_RT_CALL(cudaMemcpy(l2_norm_h, l2_norm_d, sizeof(float), cudaMemcpyDeviceToHost));
