@@ -3,9 +3,9 @@
 
 This repository contains mini applications for GPU Bootcamps. This bootcamp focuses on multi-GPU programming models.
 
-Modified for NERSC Perlmutter
-
 Scaling applications to multiple GPUs across multiple nodes requires one to be adept at not just the programming models and optimization techniques, but also at performing root-cause analysis using in-depth profiling to identify and minimize bottlenecks. In this bootcamp, participants will learn to improve the performance of an application step-by-step, taking cues from profilers along the way. Moreover, understanding of the underlying technologies and communication topology will help us utilize high-performance NVIDIA libraries to extract more performance out of the system.
+
+Makefiles and *.ipynb files modified for NERSC Perlmutter.
 
 ## Bootcamp Outline
 
