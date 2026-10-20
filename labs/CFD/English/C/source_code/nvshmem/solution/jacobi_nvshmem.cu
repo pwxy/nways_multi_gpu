@@ -34,7 +34,7 @@
 #include <iostream>
 #include <sstream>
 #include <cub/block/block_reduce.cuh>
-#include <nvToolsExt.h>
+#include <nvtx3/nvToolsExt.h>
 
 #define BLOCK_DIM_X 1024
 #define BLOCK_DIM_Y 1
@@ -232,11 +232,30 @@ int main(int argc, char* argv[]) {
     CUDA_RT_CALL(cudaSetDevice(local_rank));
     CUDA_RT_CALL(cudaFree(0));
 
-    MPI_Comm mpi_comm;
-    nvshmemx_init_attr_t attr;
+    /* PERLMUTTER: unique-ID bootstrap instead of the MPI bootstrap.
+     *
+     * Upstream this was:
+     *     MPI_Comm mpi_comm;
+     *     nvshmemx_init_attr_t attr;
+     *     mpi_comm = MPI_COMM_WORLD;
+     *     attr.mpi_comm = &mpi_comm;
+     *     ...
+     *     nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+     *
+     * which makes NVSHMEM dlopen nvshmem_bootstrap_mpi.so. That plugin links
+     * MPI itself, and the copy shipped with the HPC SDK was built against
+     * OpenMPI (libmpi.so.40) while this program links Cray MPICH
+     * (libmpi.so.12). The two are ABI-incompatible, so the load fails with
+     * "libmpi.so.40: cannot open shared object file".
+     *
+     * The UID bootstrap avoids the problem: rank 0 mints an opaque ID, MPI
+     * broadcasts the raw bytes, and every PE initialises from it. The UID
+     * plugin links no MPI at all. Same shape as ncclGetUniqueId + MPI_Bcast
+     * in the NCCL lab.
+     */
+    nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
+    nvshmemx_uniqueid_t  id   = NVSHMEMX_UNIQUEID_INITIALIZER;
 
-    mpi_comm = MPI_COMM_WORLD;
-    attr.mpi_comm = &mpi_comm;
     // Set symmetric heap size for nvshmem based on problem size
     // Its default value in nvshmem is 1 GB which is not sufficient
     // for large mesh sizes
@@ -261,7 +280,13 @@ int main(int argc, char* argv[]) {
             printf("Setting environment variable NVSHMEM_SYMMETRIC_SIZE = %llu\n", required_symmetric_heap_size);
         setenv("NVSHMEM_SYMMETRIC_SIZE", symmetric_heap_size_str, 1);
     }
-    nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+
+    /* Must stay AFTER the setenv above: NVSHMEM reads NVSHMEM_SYMMETRIC_SIZE
+       during init. */
+    if (rank == 0) nvshmemx_get_uniqueid(&id);
+    MPI_CALL(MPI_Bcast(&id, sizeof(nvshmemx_uniqueid_t), MPI_UINT8_T, 0, MPI_COMM_WORLD));
+    nvshmemx_set_attr_uniqueid_args(rank, size, &id, &attr);
+    nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
 
     int npes = nvshmem_n_pes();
     int mype = nvshmem_my_pe();
@@ -528,9 +553,9 @@ double single_gpu(const int nx, const int ny, const int iter_max, float* const a
     while (l2_norm > tol && iter < iter_max) {
         CUDA_RT_CALL(cudaMemsetAsync(l2_norm_d, 0, sizeof(float)));
 
-        jacobi_kernel<<<dim_grid, dim_block>>>(a_new, a, l2_norm_d, iy_start, iy_end, nx, 
+        jacobi_kernel<<<dim_grid, dim_block>>>(a_new, a, l2_norm_d, iy_start, iy_end, nx,
                                                 mype, iy_end + 1, mype, (iy_start - 1));
-        
+
         iter++;
         if (print && ((iter % 100) == 0)) {
             CUDA_RT_CALL(cudaMemcpy(l2_norm_h, l2_norm_d, sizeof(float), cudaMemcpyDeviceToHost));
