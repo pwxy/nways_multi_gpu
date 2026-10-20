@@ -25,15 +25,19 @@ int main (int argc, char *argv[]) {
     int mype_node, msg;
     cudaStream_t stream;
     int rank, nranks;
-    MPI_Comm mpi_comm = MPI_COMM_WORLD;
-    nvshmemx_init_attr_t attr;
+
+    nvshmemx_init_attr_t attr = NVSHMEMX_INIT_ATTR_INITIALIZER;
+    nvshmemx_uniqueid_t  id   = NVSHMEMX_UNIQUEID_INITIALIZER;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &nranks);
 
-    attr.mpi_comm = &mpi_comm;
-    nvshmemx_init_attr(NVSHMEMX_INIT_WITH_MPI_COMM, &attr);
+    if (rank == 0) nvshmemx_get_uniqueid(&id);
+    MPI_Bcast(&id, sizeof(nvshmemx_uniqueid_t), MPI_UINT8_T, 0, MPI_COMM_WORLD);
+    nvshmemx_set_attr_uniqueid_args(rank, nranks, &id, &attr);
+    nvshmemx_init_attr(NVSHMEMX_INIT_WITH_UNIQUEID, &attr);
+
     mype_node = nvshmem_team_my_pe(NVSHMEMX_TEAM_NODE);
 
     CUDA_CHECK(cudaSetDevice(mype_node));
@@ -52,4 +56,6 @@ int main (int argc, char *argv[]) {
     nvshmem_finalize();
     MPI_Finalize();
     return 0;
+
+   
 }
