@@ -9,20 +9,21 @@ endif
 ifndef MPI_HOME
 $(error MPI_HOME is not set)
 endif
-GENCODE_SM70    := -gencode arch=compute_70,code=sm_70
+# compute_70 (Volta) removed in CUDA 13; A100 is sm_80
 GENCODE_SM80    := -gencode arch=compute_80,code=sm_80 -gencode arch=compute_80,code=compute_80
-GENCODE_FLAGS	:= $(GENCODE_SM70) $(GENCODE_SM80)
+GENCODE_FLAGS	:= $(GENCODE_SM80)
 
-NVML_LIB=-L$(CUDA_HOME)/targets/x86_64-linux/lib/stubs/  -lnvidia-ml -I$(CUDA_HOME)/include # added for the nvml on Oct 20th
-NVCC_FLAGS += -dc -Xcompiler -fopenmp -lineinfo -lnvToolsExt $(GENCODE_FLAGS) -std=c++14 -I$(NVSHMEM_HOME)/include -I$(MPI_HOME)/include
-NVCC_LDFLAGS = -ccbin=mpic++ -L$(NVSHMEM_HOME)/lib -lnvshmem -L$(MPI_HOME)/lib -lmpi -L$(CUDA_HOME)/lib64 -lcuda -lcudart -lnvToolsExt
+NVML_LIB=-L$(CUDA_HOME)/targets/x86_64-linux/lib/stubs/ -lnvidia-ml -I$(CUDA_HOME)/include
+#NVCC_FLAGS += -dc -Xcompiler -fopenmp -lineinfo $(GENCODE_FLAGS) -std=c++14 -I$(NVSHMEM_HOME)/include -I$(MPI_HOME)/include
+NVCC_FLAGS += -dc -Xcompiler -fopenmp -lineinfo $(GENCODE_FLAGS) -std=c++17 -I$(NVSHMEM_HOME)/include -I$(MPI_HOME)/include
+NVCC_LDFLAGS = -ccbin=mpic++ -L$(NVSHMEM_HOME)/lib -lnvshmem_host -lnvshmem_device -L$(MPI_HOME)/lib -lmpi -L$(CUDA_HOME)/lib64 -lcuda -lcudart -Xlinker -rpath -Xlinker $(NVSHMEM_HOME)/lib
 
 left_shift: Makefile left_shift.cu
 	$(NVCC) $(NVCC_FLAGS) $(NVML_LIB) left_shift.cu -c -o left_shift.o
 	$(NVCC) $(GENCODE_FLAGS) $(NVML_LIB) left_shift.o -o left_shift $(NVCC_LDFLAGS)
 
 jacobi_nvshmem: Makefile jacobi_nvshmem.cu
-	$(NVCC) $(NVCC_FLAGS) $(NVML_LIB)jacobi_nvshmem.cu -c -o jacobi_nvshmem.o
+	$(NVCC) $(NVCC_FLAGS) $(NVML_LIB) jacobi_nvshmem.cu -c -o jacobi_nvshmem.o
 	$(NVCC) $(GENCODE_FLAGS) $(NVML_LIB) jacobi_nvshmem.o -o jacobi_nvshmem $(NVCC_LDFLAGS)
 
 .PHONY.: clean
