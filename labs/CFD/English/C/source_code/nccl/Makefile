@@ -4,13 +4,14 @@ MPICXX=mpicxx
 MPIRUN ?= mpirun
 #CUDA_HOME ?= /usr/local/cuda
 #NCCL_HOME ?= /usr/nccl/
-GENCODE_SM70    := -gencode arch=compute_70,code=sm_70
+#GENCODE_SM70    := -gencode arch=compute_70,code=sm_70
 GENCODE_SM80    := -gencode arch=compute_80,code=sm_80
 GENCODE_FLAGS	:= $(GENCODE_SM70) $(GENCODE_SM80)
 
 NVCC_FLAGS += -lineinfo $(GENCODE_FLAGS) -std=c++14
 MPICXX_FLAGS = -DUSE_NVTX -I$(CUDA_HOME)/include -I$(NCCL_HOME)/include -fopenmp -std=c++14
-LD_FLAGS = -L$(CUDA_HOME)/lib64 -lcudart -lnvToolsExt -L$(NCCL_HOME)/lib -lnccl
+LD_FLAGS = -L$(CUDA_HOME)/lib64 -lcudart -L$(NCCL_HOME)/lib -lnccl \
+           -Wl,-rpath,$(CUDA_HOME)/lib64 -Wl,-rpath,$(NCCL_HOME)/lib -Wl,-rpath,$(NCCL_HOME)/plugin/lib
 
 jacobi_nccl: Makefile jacobi_nccl.cpp jacobi_kernels.o
 	$(MPICXX) $(MPICXX_FLAGS) jacobi_nccl.cpp jacobi_kernels.o $(LD_FLAGS) -o jacobi_nccl
